@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Image Resizer and Compressor</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace" aria-labelledby="app-title">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Browser Image Tool</p>
+            <h1 id="app-title">Image Resizer and Compressor</h1>
+          </div>
+          <button class="ghost-button" id="resetButton" type="button" disabled>Reset</button>
+        </header>
+
+        <div class="tool-grid">
+          <section class="panel upload-panel" aria-label="Upload images">
+            <label class="drop-zone" id="dropZone" for="fileInput">
+              <input id="fileInput" type="file" accept="image/*" multiple>
+              <span class="drop-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" role="img">
+                  <path d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1Z"></path>
+                  <path d="M5 19a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1Z"></path>
+                </svg>
+              </span>
+              <strong>Drop images here</strong>
+              <span>or click to choose JPG, PNG, WebP, GIF, BMP, or AVIF files</span>
+            </label>
+
+            <div class="file-summary empty" id="fileSummary">
+              <span>No images loaded</span>
+            </div>
+          </section>
+
+          <section class="panel controls-panel" aria-label="Resize and compression controls">
+            <div class="control-row">
+              <label for="formatSelect">Output format</label>
+              <select id="formatSelect" disabled>
+                <option value="image/jpeg">JPG</option>
+                <option value="image/webp">WebP</option>
+                <option value="image/png">PNG</option>
+              </select>
+            </div>
+
+            <div class="dimensions-grid">
+              <div class="control-row">
+                <label for="widthInput">Max width</label>
+                <input id="widthInput" type="number" min="1" step="1" inputmode="numeric" disabled>
+              </div>
+              <div class="control-row">
+                <label for="heightInput">Max height</label>
+                <input id="heightInput" type="number" min="1" step="1" inputmode="numeric" disabled>
+              </div>
+            </div>
+
+            <label class="check-row" for="lockAspect">
+              <input id="lockAspect" type="checkbox" checked disabled>
+              <span>Keep aspect ratio</span>
+            </label>
+
+            <div class="control-row slider-row">
+              <div class="label-line">
+                <label for="qualityInput">Compression quality</label>
+                <output id="qualityValue" for="qualityInput">82%</output>
+              </div>
+              <input id="qualityInput" type="range" min="10" max="100" value="82" disabled>
+            </div>
+
+            <div class="preset-row" aria-label="Resize presets">
+              <button type="button" class="preset-button" data-scale="1" disabled>100%</button>
+              <button type="button" class="preset-button" data-scale="0.75" disabled>75%</button>
+              <button type="button" class="preset-button" data-scale="0.5" disabled>50%</button>
+              <button type="button" class="preset-button" data-scale="0.25" disabled>25%</button>
+            </div>
+
+            <button class="primary-button" id="processButton" type="button" disabled>Compress Batch</button>
+          </section>
+        </div>
+
+        <section class="result-panel" aria-live="polite">
+          <div class="metric">
+            <span>Images</span>
+            <strong id="imageCount">-</strong>
+          </div>
+          <div class="metric">
+            <span>Original total</span>
+            <strong id="originalSize">-</strong>
+          </div>
+          <div class="metric">
+            <span>Batch savings</span>
+            <strong id="savingsValue">-</strong>
+          </div>
+          <button class="download-button disabled" id="downloadAllButton" type="button" disabled>Download ZIP</button>
+        </section>
+
+        <section class="queue-panel" aria-label="Batch image queue">
+          <div class="queue-heading">
+            <h2>Batch Queue</h2>
+            <span id="queueStatus">Waiting for images</span>
+          </div>
+          <div class="queue-list empty" id="queueList">
+            <span class="placeholder">Selected images will appear here</span>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
