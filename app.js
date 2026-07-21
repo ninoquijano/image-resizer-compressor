@@ -190,6 +190,7 @@ videoElements.bitrateInput.addEventListener("input", () => {
 
 videoElements.processButton.addEventListener("click", optimizeVideo);
 videoElements.resetButton.addEventListener("click", resetVideo);
+initializeVideoFormatOptions();
 
 async function addFiles(fileList) {
   const files = Array.from(fileList || []);
@@ -597,9 +598,10 @@ async function optimizeVideo() {
     return;
   }
 
-  const mimeType = getSupportedVideoMimeType();
+  const outputFormat = videoElements.formatSelect.value;
+  const mimeType = getSupportedVideoMimeType(outputFormat);
   if (!mimeType) {
-    showVideoWarning("This browser cannot export WebM video.");
+    showVideoWarning(`This browser cannot export ${getVideoFormatLabel(outputFormat)} video.`);
     return;
   }
 
@@ -661,7 +663,7 @@ async function optimizeVideo() {
         }
       };
       recorder.onerror = () => reject(new Error("Video recording failed"));
-      recorder.onstop = () => resolve(new Blob(chunks, { type: "video/webm" }));
+      recorder.onstop = () => resolve(new Blob(chunks, { type: outputFormat }));
     });
 
     let drawing = true;
@@ -701,11 +703,11 @@ async function optimizeVideo() {
     videoState.outputUrl = URL.createObjectURL(blob);
 
     videoElements.outputPreview.src = videoState.outputUrl;
-    videoElements.outputMeta.textContent = `${width} x ${height}px | WebM`;
+    videoElements.outputMeta.textContent = `${width} x ${height}px | ${getVideoFormatLabel(outputFormat)}`;
     videoElements.outputSize.textContent = formatBytes(blob.size);
     videoElements.savingsValue.textContent = getSavingsText(videoState.file.size, blob.size);
     videoElements.downloadLink.href = videoState.outputUrl;
-    videoElements.downloadLink.download = `${videoState.file.name.replace(/\.[^.]+$/, "")}-optimized.webm`;
+    videoElements.downloadLink.download = `${videoState.file.name.replace(/\.[^.]+$/, "")}-optimized.${getVideoExtension(outputFormat)}`;
     videoElements.downloadLink.classList.remove("disabled");
     setVideoProgress(100);
     setVideoStatus("Video optimized");
@@ -721,6 +723,10 @@ async function optimizeVideo() {
       audioContext.close();
     }
     videoState.processing = false;
+    if (videoState.blob) {
+      setVideoProgress(100);
+      setVideoStatus("Video optimized");
+    }
     setVideoControlsEnabled(Boolean(videoState.file));
   }
 }
@@ -783,6 +789,7 @@ function setVideoControlsEnabled(isEnabled) {
   videoEnabledControls.forEach((control) => {
     control.disabled = !isEnabled;
   });
+  updateVideoFormatAvailability();
 }
 
 function getVideoOutputDimensions() {
@@ -801,12 +808,61 @@ function getVideoOutputDimensions() {
   };
 }
 
-function getSupportedVideoMimeType() {
-  return [
-    "video/webm;codecs=vp9,opus",
-    "video/webm;codecs=vp8,opus",
-    "video/webm",
-  ].find((type) => MediaRecorder.isTypeSupported(type));
+function initializeVideoFormatOptions() {
+  updateVideoFormatAvailability();
+}
+
+function updateVideoFormatAvailability() {
+  if (!window.MediaRecorder) {
+    return;
+  }
+
+  Array.from(videoElements.formatSelect.options).forEach((option) => {
+    const isSupported = Boolean(getSupportedVideoMimeType(option.value));
+    option.disabled = !isSupported;
+    option.textContent = isSupported
+      ? getVideoFormatLabel(option.value)
+      : `${getVideoFormatLabel(option.value)} unsupported`;
+  });
+
+  if (!getSupportedVideoMimeType(videoElements.formatSelect.value)) {
+    const supportedOption = Array.from(videoElements.formatSelect.options).find((option) => !option.disabled);
+    if (supportedOption) {
+      videoElements.formatSelect.value = supportedOption.value;
+    }
+  }
+}
+
+function getSupportedVideoMimeType(format) {
+  const mimeTypes = {
+    "video/webm": [
+      "video/webm;codecs=vp9,opus",
+      "video/webm;codecs=vp8,opus",
+      "video/webm",
+    ],
+    "video/mp4": [
+      "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+      "video/mp4;codecs=avc1.42E01E",
+      "video/mp4;codecs=h264,aac",
+      "video/mp4",
+    ],
+  }[format] || [];
+
+  return mimeTypes.find((type) => MediaRecorder.isTypeSupported(type));
+}
+
+function getVideoFormatLabel(format) {
+  return {
+    "video/webm": "WebM",
+    "video/mp4": "MP4",
+  }[format] || "Video";
+}
+
+function getVideoExtension(format) {
+  return {
+    "video/webm": "webm",
+    "video/mp4": "mp4",
+  }[format] || "webm";
 }
 
 function loadVideoMetadata(video) {
