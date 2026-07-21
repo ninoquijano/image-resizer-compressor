@@ -16,6 +16,20 @@ const videoState = {
   processing: false,
 };
 
+const pdfState = {
+  file: null,
+  document: null,
+  pageThumbUrls: [],
+  pdfBlob: null,
+  pdfUrl: "",
+  imageEntries: [],
+  processing: false,
+  pdfjsLib: null,
+};
+
+const PDFJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
+const PDFJS_WORKER_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
+
 const elements = {
   fileInput: document.getElementById("fileInput"),
   dropZone: document.getElementById("dropZone"),
@@ -62,6 +76,31 @@ const videoElements = {
   status: document.getElementById("videoStatus"),
 };
 
+const pdfElements = {
+  input: document.getElementById("pdfInput"),
+  dropZone: document.getElementById("pdfDropZone"),
+  summary: document.getElementById("pdfSummary"),
+  scaleSelect: document.getElementById("pdfScaleSelect"),
+  imageFormatSelect: document.getElementById("pdfImageFormatSelect"),
+  qualityInput: document.getElementById("pdfQualityInput"),
+  qualityValue: document.getElementById("pdfQualityValue"),
+  compressButton: document.getElementById("pdfCompressButton"),
+  exportImagesButton: document.getElementById("pdfExportImagesButton"),
+  resetButton: document.getElementById("pdfResetButton"),
+  pageCount: document.getElementById("pdfPageCount"),
+  originalSize: document.getElementById("pdfOriginalSize"),
+  savingsValue: document.getElementById("pdfSavingsValue"),
+  downloadLink: document.getElementById("pdfDownloadLink"),
+  pagesList: document.getElementById("pdfPagesList"),
+  status: document.getElementById("pdfStatus"),
+  imageCount: document.getElementById("pdfImageCount"),
+  imagesSize: document.getElementById("pdfImagesSize"),
+  imagesFormat: document.getElementById("pdfImagesFormat"),
+  imagesDownloadButton: document.getElementById("pdfImagesDownloadButton"),
+  progressWrap: document.getElementById("pdfProgressWrap"),
+  progressBar: document.getElementById("pdfProgressBar"),
+};
+
 const enabledControls = [
   elements.formatSelect,
   elements.widthInput,
@@ -83,6 +122,15 @@ const videoEnabledControls = [
   videoElements.resetButton,
 ];
 
+const pdfEnabledControls = [
+  pdfElements.scaleSelect,
+  pdfElements.imageFormatSelect,
+  pdfElements.qualityInput,
+  pdfElements.compressButton,
+  pdfElements.exportImagesButton,
+  pdfElements.resetButton,
+];
+
 elements.fileInput.addEventListener("change", (event) => {
   addFiles(event.target.files);
 });
@@ -91,6 +139,13 @@ videoElements.input.addEventListener("change", (event) => {
   const [file] = event.target.files;
   if (file) {
     loadVideoFile(file);
+  }
+});
+
+pdfElements.input.addEventListener("change", (event) => {
+  const [file] = event.target.files;
+  if (file) {
+    loadPdfFile(file);
   }
 });
 
@@ -130,6 +185,27 @@ videoElements.dropZone.addEventListener("drop", (event) => {
   const [file] = event.dataTransfer.files;
   if (file) {
     loadVideoFile(file);
+  }
+});
+
+["dragenter", "dragover"].forEach((eventName) => {
+  pdfElements.dropZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    pdfElements.dropZone.classList.add("drag-over");
+  });
+});
+
+["dragleave", "drop"].forEach((eventName) => {
+  pdfElements.dropZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    pdfElements.dropZone.classList.remove("drag-over");
+  });
+});
+
+pdfElements.dropZone.addEventListener("drop", (event) => {
+  const [file] = event.dataTransfer.files;
+  if (file) {
+    loadPdfFile(file);
   }
 });
 
@@ -179,6 +255,15 @@ videoElements.bitrateInput.addEventListener("input", () => {
   clearVideoOutput();
 });
 
+pdfElements.qualityInput.addEventListener("input", () => {
+  pdfElements.qualityValue.value = `${pdfElements.qualityInput.value}%`;
+  clearPdfOutputs();
+});
+
+[pdfElements.scaleSelect, pdfElements.imageFormatSelect].forEach((control) => {
+  control.addEventListener("change", clearPdfOutputs);
+});
+
 [
   videoElements.resolutionSelect,
   videoElements.frameRateSelect,
@@ -191,6 +276,10 @@ videoElements.bitrateInput.addEventListener("input", () => {
 videoElements.processButton.addEventListener("click", optimizeVideo);
 videoElements.resetButton.addEventListener("click", resetVideo);
 initializeVideoFormatOptions();
+pdfElements.compressButton.addEventListener("click", compressPdf);
+pdfElements.exportImagesButton.addEventListener("click", exportPdfImages);
+pdfElements.resetButton.addEventListener("click", resetPdf);
+pdfElements.imagesDownloadButton.addEventListener("click", downloadPdfImagesZip);
 
 async function addFiles(fileList) {
   const files = Array.from(fileList || []);
@@ -886,6 +975,378 @@ function showVideoWarning(message) {
   videoElements.status.innerHTML = `<span>${escapeHtml(message)}</span>`;
 }
 
+async function loadPdfFile(file) {
+  if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+    showPdfWarning("Please choose a PDF file.");
+    return;
+  }
+
+  resetPdf();
+  pdfState.file = file;
+  setPdfStatus("Loading PDF...");
+
+  try {
+    const pdfjsLib = await ensurePdfJs();
+    const data = await file.arrayBuffer();
+    pdfState.document = await pdfjsLib.getDocument({ data }).promise;
+
+    pdfElements.summary.className = "file-summary";
+    pdfElements.summary.innerHTML = `
+      <span>${escapeHtml(file.name)}</span>
+      <strong>${formatBytes(file.size)}</strong>
+    `;
+    pdfElements.pageCount.textContent = String(pdfState.document.numPages);
+    pdfElements.originalSize.textContent = formatBytes(file.size);
+    setPdfControlsEnabled(true);
+    setPdfStatus(`${pdfState.document.numPages} page${pdfState.document.numPages === 1 ? "" : "s"} ready`);
+  } catch (error) {
+    resetPdf();
+    showPdfWarning("This PDF could not be opened in the browser.");
+  }
+}
+
+async function compressPdf() {
+  if (!pdfState.document || pdfState.processing) {
+    return;
+  }
+
+  pdfState.processing = true;
+  setPdfControlsEnabled(false);
+  clearPdfOutputs();
+  setPdfProgress(0);
+  pdfElements.progressWrap.setAttribute("aria-hidden", "false");
+
+  try {
+    const pages = await renderPdfPages("image/jpeg");
+    const pdfBlob = await buildImagePdf(pages);
+    revokeUrl(pdfState.pdfUrl);
+    pdfState.pdfBlob = pdfBlob;
+    pdfState.pdfUrl = URL.createObjectURL(pdfBlob);
+
+    const baseName = pdfState.file.name.replace(/\.[^.]+$/, "");
+    pdfElements.downloadLink.href = pdfState.pdfUrl;
+    pdfElements.downloadLink.download = `${baseName}-compressed.pdf`;
+    pdfElements.downloadLink.classList.remove("disabled");
+    pdfElements.savingsValue.textContent = getSavingsText(pdfState.file.size, pdfBlob.size);
+    renderPdfPagesList(pages);
+    setPdfStatus("Compressed PDF ready");
+    setPdfProgress(100);
+  } catch (error) {
+    showPdfWarning("PDF compression failed. Try a smaller PDF or lower render size.");
+  } finally {
+    pdfState.processing = false;
+    setPdfControlsEnabled(Boolean(pdfState.document));
+  }
+}
+
+async function exportPdfImages() {
+  if (!pdfState.document || pdfState.processing) {
+    return;
+  }
+
+  pdfState.processing = true;
+  setPdfControlsEnabled(false);
+  clearPdfImageOutputs();
+  setPdfProgress(0);
+  pdfElements.progressWrap.setAttribute("aria-hidden", "false");
+
+  try {
+    const format = pdfElements.imageFormatSelect.value;
+    const pages = await renderPdfPages(format);
+    const extension = getImageExtension(format);
+    const baseName = pdfState.file.name.replace(/\.[^.]+$/, "");
+    pdfState.imageEntries = pages.map((page) => ({
+      fileName: `${baseName}-page-${String(page.number).padStart(3, "0")}.${extension}`,
+      blob: page.blob,
+    }));
+
+    renderPdfPagesList(pages);
+    updatePdfImageSummary();
+    setPdfStatus("Page images ready");
+    setPdfProgress(100);
+  } catch (error) {
+    showPdfWarning("PDF image export failed. Try a smaller PDF or lower render size.");
+  } finally {
+    pdfState.processing = false;
+    setPdfControlsEnabled(Boolean(pdfState.document));
+  }
+}
+
+async function renderPdfPages(format) {
+  const pages = [];
+  const scale = Number(pdfElements.scaleSelect.value);
+  const quality = Number(pdfElements.qualityInput.value) / 100;
+  const pageCount = pdfState.document.numPages;
+
+  clearPdfThumbs();
+  setPdfStatus(`Rendering 1 of ${pageCount}`);
+
+  for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+    const page = await pdfState.document.getPage(pageNumber);
+    const baseViewport = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(viewport.width));
+    canvas.height = Math.max(1, Math.round(viewport.height));
+
+    const context = canvas.getContext("2d");
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: context, viewport }).promise;
+
+    const blob = await canvasToBlob(canvas, format, format === "image/png" ? undefined : quality);
+    const thumbUrl = URL.createObjectURL(blob);
+    pdfState.pageThumbUrls.push(thumbUrl);
+    pages.push({
+      number: pageNumber,
+      blob,
+      thumbUrl,
+      width: canvas.width,
+      height: canvas.height,
+      pageWidth: baseViewport.width,
+      pageHeight: baseViewport.height,
+      format,
+    });
+
+    const percent = Math.round((pageNumber / pageCount) * 100);
+    setPdfProgress(percent);
+    setPdfStatus(`Rendering ${Math.min(pageNumber + 1, pageCount)} of ${pageCount}`);
+  }
+
+  return pages;
+}
+
+function renderPdfPagesList(pages) {
+  if (!pages.length) {
+    pdfElements.pagesList.className = "pdf-pages-list empty";
+    pdfElements.pagesList.innerHTML = '<span class="placeholder">Rendered pages will appear here</span>';
+    return;
+  }
+
+  pdfElements.pagesList.className = "pdf-pages-list";
+  pdfElements.pagesList.innerHTML = pages.map((page) => `
+    <article class="pdf-page-card">
+      <img src="${page.thumbUrl}" alt="PDF page ${page.number}">
+      <strong>Page ${page.number}</strong>
+      <span>${page.width} x ${page.height}px | ${formatBytes(page.blob.size)}</span>
+    </article>
+  `).join("");
+}
+
+async function buildImagePdf(pages) {
+  const objects = [];
+  const rootId = addPdfObject(objects, "<< /Type /Catalog /Pages 2 0 R >>");
+  const pageKids = pages.map((_, index) => `${3 + index * 3} 0 R`).join(" ");
+  addPdfObject(objects, `<< /Type /Pages /Kids [${pageKids}] /Count ${pages.length} >>`);
+
+  for (let index = 0; index < pages.length; index += 1) {
+    const page = pages[index];
+    const pageId = 3 + index * 3;
+    const contentId = pageId + 1;
+    const imageId = pageId + 2;
+    const safePageWidth = numberForPdf(page.pageWidth);
+    const safePageHeight = numberForPdf(page.pageHeight);
+    const content = `q\n${safePageWidth} 0 0 ${safePageHeight} 0 0 cm\n/Im${index + 1} Do\nQ\n`;
+
+    addPdfObject(
+      objects,
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${safePageWidth} ${safePageHeight}] /Resources << /XObject << /Im${index + 1} ${imageId} 0 R >> >> /Contents ${contentId} 0 R >>`
+    );
+    addPdfObject(objects, `<< /Length ${content.length} >>\nstream\n${content}endstream`);
+
+    const imageBytes = new Uint8Array(await page.blob.arrayBuffer());
+    addPdfObject(
+      objects,
+      `<< /Type /XObject /Subtype /Image /Width ${page.width} /Height ${page.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBytes.byteLength} >>\nstream\n`,
+      imageBytes,
+      "\nendstream"
+    );
+  }
+
+  return createPdfBlob(objects, rootId);
+}
+
+function addPdfObject(objects, header, binary = null, footer = "") {
+  objects.push({ header, binary, footer });
+  return objects.length;
+}
+
+function createPdfBlob(objects, rootId) {
+  const encoder = new TextEncoder();
+  const parts = [];
+  const offsets = [0];
+  let offset = 0;
+
+  function pushPart(part) {
+    parts.push(part);
+    offset += typeof part === "string" ? encoder.encode(part).byteLength : part.byteLength;
+  }
+
+  pushPart("%PDF-1.4\n% generated\n");
+
+  objects.forEach((object, index) => {
+    offsets[index + 1] = offset;
+    pushPart(`${index + 1} 0 obj\n`);
+    pushPart(object.header);
+    if (object.binary) {
+      pushPart(object.binary);
+    }
+    if (object.footer) {
+      pushPart(object.footer);
+    }
+    pushPart("\nendobj\n");
+  });
+
+  const xrefOffset = offset;
+  pushPart(`xref\n0 ${objects.length + 1}\n`);
+  pushPart("0000000000 65535 f \n");
+  offsets.slice(1).forEach((objectOffset) => {
+    pushPart(`${String(objectOffset).padStart(10, "0")} 00000 n \n`);
+  });
+  pushPart(`trailer\n<< /Size ${objects.length + 1} /Root ${rootId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
+
+  return new Blob(parts, { type: "application/pdf" });
+}
+
+function clearPdfOutputs() {
+  if (pdfState.processing) {
+    return;
+  }
+  revokeUrl(pdfState.pdfUrl);
+  pdfState.pdfBlob = null;
+  pdfState.pdfUrl = "";
+  pdfElements.downloadLink.removeAttribute("href");
+  pdfElements.downloadLink.removeAttribute("download");
+  pdfElements.downloadLink.classList.add("disabled");
+  pdfElements.savingsValue.textContent = "-";
+  clearPdfImageOutputs();
+  clearPdfThumbs();
+  renderPdfPagesList([]);
+  if (pdfState.document) {
+    setPdfStatus(`${pdfState.document.numPages} page${pdfState.document.numPages === 1 ? "" : "s"} ready`);
+  }
+}
+
+function clearPdfImageOutputs() {
+  pdfState.imageEntries = [];
+  pdfElements.imageCount.textContent = "-";
+  pdfElements.imagesSize.textContent = "-";
+  pdfElements.imagesFormat.textContent = "-";
+  pdfElements.imagesDownloadButton.disabled = true;
+  pdfElements.imagesDownloadButton.classList.add("disabled");
+}
+
+function resetPdf() {
+  revokeUrl(pdfState.pdfUrl);
+  clearPdfThumbs();
+  pdfState.file = null;
+  pdfState.document = null;
+  pdfState.pdfBlob = null;
+  pdfState.pdfUrl = "";
+  pdfState.imageEntries = [];
+  pdfState.processing = false;
+
+  pdfElements.input.value = "";
+  pdfElements.summary.className = "file-summary empty";
+  pdfElements.summary.innerHTML = "<span>No PDF loaded</span>";
+  pdfElements.pageCount.textContent = "-";
+  pdfElements.originalSize.textContent = "-";
+  pdfElements.savingsValue.textContent = "-";
+  pdfElements.downloadLink.removeAttribute("href");
+  pdfElements.downloadLink.removeAttribute("download");
+  pdfElements.downloadLink.classList.add("disabled");
+  pdfElements.progressWrap.setAttribute("aria-hidden", "true");
+  setPdfProgress(0);
+  clearPdfImageOutputs();
+  renderPdfPagesList([]);
+  setPdfStatus("Waiting for PDF");
+  setPdfControlsEnabled(false);
+}
+
+function clearPdfThumbs() {
+  pdfState.pageThumbUrls.forEach(revokeUrl);
+  pdfState.pageThumbUrls = [];
+}
+
+function updatePdfImageSummary() {
+  const totalSize = pdfState.imageEntries.reduce((sum, entry) => sum + entry.blob.size, 0);
+  pdfElements.imageCount.textContent = String(pdfState.imageEntries.length);
+  pdfElements.imagesSize.textContent = formatBytes(totalSize);
+  pdfElements.imagesFormat.textContent = getImageExtension(pdfElements.imageFormatSelect.value).toUpperCase();
+  pdfElements.imagesDownloadButton.disabled = pdfState.imageEntries.length === 0;
+  pdfElements.imagesDownloadButton.classList.toggle("disabled", pdfState.imageEntries.length === 0);
+}
+
+async function downloadPdfImagesZip() {
+  if (pdfState.imageEntries.length === 0) {
+    return;
+  }
+
+  pdfElements.imagesDownloadButton.disabled = true;
+  pdfElements.imagesDownloadButton.textContent = "Preparing...";
+
+  try {
+    const zipBlob = await createZipFromEntries(pdfState.imageEntries);
+    const zipUrl = URL.createObjectURL(zipBlob);
+    triggerDownload(zipUrl, `${pdfState.file.name.replace(/\.[^.]+$/, "")}-pages.zip`);
+    window.setTimeout(() => revokeUrl(zipUrl), 1000);
+  } finally {
+    pdfElements.imagesDownloadButton.disabled = false;
+    pdfElements.imagesDownloadButton.textContent = "Download Images ZIP";
+  }
+}
+
+async function ensurePdfJs() {
+  if (!pdfState.pdfjsLib) {
+    pdfState.pdfjsLib = await import(PDFJS_URL);
+    pdfState.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
+  }
+  return pdfState.pdfjsLib;
+}
+
+function setPdfControlsEnabled(isEnabled) {
+  pdfEnabledControls.forEach((control) => {
+    control.disabled = !isEnabled;
+  });
+}
+
+function setPdfProgress(percent) {
+  pdfElements.progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+}
+
+function setPdfStatus(message) {
+  pdfElements.status.textContent = message;
+  pdfElements.status.classList.remove("warning-text");
+}
+
+function showPdfWarning(message) {
+  pdfElements.status.textContent = message;
+  pdfElements.status.classList.add("warning-text");
+}
+
+function canvasToBlob(canvas, format, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob);
+      } else {
+        reject(new Error("Canvas export failed"));
+      }
+    }, format, quality);
+  });
+}
+
+function numberForPdf(value) {
+  return Number(value).toFixed(2).replace(/\.00$/, "");
+}
+
+function getImageExtension(format) {
+  return {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+  }[format] || "jpg";
+}
+
 function setControlsEnabled(isEnabled) {
   enabledControls.forEach((control) => {
     control.disabled = !isEnabled;
@@ -1020,6 +1481,77 @@ async function createZipBlob(items) {
   endView.setUint16(6, 0, true);
   endView.setUint16(8, items.length, true);
   endView.setUint16(10, items.length, true);
+  endView.setUint32(12, centralSize, true);
+  endView.setUint32(16, centralOffset, true);
+  endView.setUint16(20, 0, true);
+
+  return new Blob([...fileParts, ...centralDirectory, endRecord], { type: "application/zip" });
+}
+
+async function createZipFromEntries(entries) {
+  const fileParts = [];
+  const centralDirectory = [];
+  const encoder = new TextEncoder();
+  const usedNames = new Map();
+  let offset = 0;
+  const { dosTime, dosDate } = getDosTimestamp(new Date());
+
+  for (const entry of entries) {
+    const fileName = getUniqueZipName(entry.fileName, usedNames);
+    const nameBytes = encoder.encode(fileName);
+    const data = new Uint8Array(await entry.blob.arrayBuffer());
+    const crc = getCrc32(data);
+
+    const localHeader = new Uint8Array(30 + nameBytes.length);
+    const localView = new DataView(localHeader.buffer);
+    localView.setUint32(0, 0x04034b50, true);
+    localView.setUint16(4, 20, true);
+    localView.setUint16(6, 0x0800, true);
+    localView.setUint16(8, 0, true);
+    localView.setUint16(10, dosTime, true);
+    localView.setUint16(12, dosDate, true);
+    localView.setUint32(14, crc, true);
+    localView.setUint32(18, data.byteLength, true);
+    localView.setUint32(22, data.byteLength, true);
+    localView.setUint16(26, nameBytes.length, true);
+    localView.setUint16(28, 0, true);
+    localHeader.set(nameBytes, 30);
+
+    const centralHeader = new Uint8Array(46 + nameBytes.length);
+    const centralView = new DataView(centralHeader.buffer);
+    centralView.setUint32(0, 0x02014b50, true);
+    centralView.setUint16(4, 20, true);
+    centralView.setUint16(6, 20, true);
+    centralView.setUint16(8, 0x0800, true);
+    centralView.setUint16(10, 0, true);
+    centralView.setUint16(12, dosTime, true);
+    centralView.setUint16(14, dosDate, true);
+    centralView.setUint32(16, crc, true);
+    centralView.setUint32(20, data.byteLength, true);
+    centralView.setUint32(24, data.byteLength, true);
+    centralView.setUint16(28, nameBytes.length, true);
+    centralView.setUint16(30, 0, true);
+    centralView.setUint16(32, 0, true);
+    centralView.setUint16(34, 0, true);
+    centralView.setUint16(36, 0, true);
+    centralView.setUint32(38, 0, true);
+    centralView.setUint32(42, offset, true);
+    centralHeader.set(nameBytes, 46);
+
+    fileParts.push(localHeader, data);
+    centralDirectory.push(centralHeader);
+    offset += localHeader.byteLength + data.byteLength;
+  }
+
+  const centralOffset = offset;
+  const centralSize = centralDirectory.reduce((sum, part) => sum + part.byteLength, 0);
+  const endRecord = new Uint8Array(22);
+  const endView = new DataView(endRecord.buffer);
+  endView.setUint32(0, 0x06054b50, true);
+  endView.setUint16(4, 0, true);
+  endView.setUint16(6, 0, true);
+  endView.setUint16(8, entries.length, true);
+  endView.setUint16(10, entries.length, true);
   endView.setUint32(12, centralSize, true);
   endView.setUint32(16, centralOffset, true);
   endView.setUint16(20, 0, true);

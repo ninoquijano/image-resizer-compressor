@@ -221,6 +221,116 @@
             <span>Waiting for video</span>
           </div>
         </section>
+
+        <section class="pdf-tool" aria-labelledby="pdf-title">
+          <header class="section-heading">
+            <div>
+              <p class="eyebrow">Browser PDF Tool</p>
+              <h2 id="pdf-title">PDF Compressor and Image Exporter</h2>
+            </div>
+            <button class="ghost-button" id="pdfResetButton" type="button" disabled>Reset PDF</button>
+          </header>
+
+          <div class="tool-grid">
+            <section class="panel upload-panel" aria-label="Upload PDF">
+              <label class="drop-zone pdf-drop-zone" id="pdfDropZone" for="pdfInput">
+                <input id="pdfInput" type="file" accept="application/pdf,.pdf">
+                <span class="drop-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" role="img">
+                    <path d="M7 2a3 3 0 0 0-3 3v14a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V8.83a3 3 0 0 0-.88-2.12l-3.83-3.83A3 3 0 0 0 13.17 2H7Zm0 2h6v4a1 1 0 0 0 1 1h4v10a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm8 1.41L16.59 7H15V5.41Z"></path>
+                    <path d="M8 12a1 1 0 0 1 1-1h6a1 1 0 1 1 0 2H9a1 1 0 0 1-1-1Zm0 4a1 1 0 0 1 1-1h4a1 1 0 1 1 0 2H9a1 1 0 0 1-1-1Z"></path>
+                  </svg>
+                </span>
+                <strong>Drop a PDF here</strong>
+                <span>or click to choose a PDF for compression and page image export</span>
+              </label>
+
+              <div class="file-summary empty" id="pdfSummary">
+                <span>No PDF loaded</span>
+              </div>
+            </section>
+
+            <section class="panel controls-panel" aria-label="PDF compression controls">
+              <div class="dimensions-grid">
+                <div class="control-row">
+                  <label for="pdfScaleSelect">Render size</label>
+                  <select id="pdfScaleSelect" disabled>
+                    <option value="1.5">High</option>
+                    <option value="1" selected>Balanced</option>
+                    <option value="0.75">Small</option>
+                    <option value="0.5">Tiny</option>
+                  </select>
+                </div>
+                <div class="control-row">
+                  <label for="pdfImageFormatSelect">Image export</label>
+                  <select id="pdfImageFormatSelect" disabled>
+                    <option value="image/jpeg" selected>JPG</option>
+                    <option value="image/png">PNG</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="control-row slider-row">
+                <div class="label-line">
+                  <label for="pdfQualityInput">PDF image quality</label>
+                  <output id="pdfQualityValue" for="pdfQualityInput">72%</output>
+                </div>
+                <input id="pdfQualityInput" type="range" min="35" max="95" value="72" disabled>
+              </div>
+
+              <div class="preset-row pdf-actions-row">
+                <button class="primary-button" id="pdfCompressButton" type="button" disabled>Compress PDF</button>
+                <button class="primary-button" id="pdfExportImagesButton" type="button" disabled>Export Images</button>
+              </div>
+            </section>
+          </div>
+
+          <section class="result-panel pdf-result-panel" aria-live="polite">
+            <div class="metric">
+              <span>Pages</span>
+              <strong id="pdfPageCount">-</strong>
+            </div>
+            <div class="metric">
+              <span>Original size</span>
+              <strong id="pdfOriginalSize">-</strong>
+            </div>
+            <div class="metric">
+              <span>PDF savings</span>
+              <strong id="pdfSavingsValue">-</strong>
+            </div>
+            <a class="download-button disabled" id="pdfDownloadLink" download>Download PDF</a>
+          </section>
+
+          <section class="queue-panel pdf-pages-panel" aria-label="PDF page export queue">
+            <div class="queue-heading">
+              <h2>PDF Pages</h2>
+              <span id="pdfStatus">Waiting for PDF</span>
+            </div>
+            <div class="pdf-pages-list empty" id="pdfPagesList">
+              <span class="placeholder">Rendered pages will appear here</span>
+            </div>
+          </section>
+
+          <section class="result-panel pdf-images-result-panel" aria-live="polite">
+            <div class="metric">
+              <span>Exported images</span>
+              <strong id="pdfImageCount">-</strong>
+            </div>
+            <div class="metric">
+              <span>Images total</span>
+              <strong id="pdfImagesSize">-</strong>
+            </div>
+            <div class="metric">
+              <span>Image format</span>
+              <strong id="pdfImagesFormat">-</strong>
+            </div>
+            <button class="download-button disabled" id="pdfImagesDownloadButton" type="button" disabled>Download Images ZIP</button>
+          </section>
+
+          <div class="video-progress" id="pdfProgressWrap" aria-hidden="true">
+            <div id="pdfProgressBar"></div>
+          </div>
+        </section>
       </section>
     </main>
 
