@@ -5,6 +5,17 @@ const state = {
   processing: false,
 };
 
+const videoState = {
+  file: null,
+  originalUrl: "",
+  outputUrl: "",
+  blob: null,
+  width: 0,
+  height: 0,
+  duration: 0,
+  processing: false,
+};
+
 const elements = {
   fileInput: document.getElementById("fileInput"),
   dropZone: document.getElementById("dropZone"),
@@ -26,6 +37,31 @@ const elements = {
   presetButtons: Array.from(document.querySelectorAll(".preset-button")),
 };
 
+const videoElements = {
+  input: document.getElementById("videoInput"),
+  dropZone: document.getElementById("videoDropZone"),
+  summary: document.getElementById("videoSummary"),
+  resolutionSelect: document.getElementById("videoResolutionSelect"),
+  bitrateInput: document.getElementById("videoBitrateInput"),
+  bitrateValue: document.getElementById("videoBitrateValue"),
+  frameRateSelect: document.getElementById("videoFrameRateSelect"),
+  formatSelect: document.getElementById("videoFormatSelect"),
+  audioCheck: document.getElementById("videoAudioCheck"),
+  processButton: document.getElementById("videoProcessButton"),
+  resetButton: document.getElementById("videoResetButton"),
+  originalPreview: document.getElementById("videoOriginalPreview"),
+  outputPreview: document.getElementById("videoOutputPreview"),
+  originalMeta: document.getElementById("videoOriginalMeta"),
+  outputMeta: document.getElementById("videoOutputMeta"),
+  originalSize: document.getElementById("videoOriginalSize"),
+  outputSize: document.getElementById("videoOutputSize"),
+  savingsValue: document.getElementById("videoSavingsValue"),
+  downloadLink: document.getElementById("videoDownloadLink"),
+  progressWrap: document.getElementById("videoProgressWrap"),
+  progressBar: document.getElementById("videoProgressBar"),
+  status: document.getElementById("videoStatus"),
+};
+
 const enabledControls = [
   elements.formatSelect,
   elements.widthInput,
@@ -37,8 +73,25 @@ const enabledControls = [
   ...elements.presetButtons,
 ];
 
+const videoEnabledControls = [
+  videoElements.resolutionSelect,
+  videoElements.bitrateInput,
+  videoElements.frameRateSelect,
+  videoElements.formatSelect,
+  videoElements.audioCheck,
+  videoElements.processButton,
+  videoElements.resetButton,
+];
+
 elements.fileInput.addEventListener("change", (event) => {
   addFiles(event.target.files);
+});
+
+videoElements.input.addEventListener("change", (event) => {
+  const [file] = event.target.files;
+  if (file) {
+    loadVideoFile(file);
+  }
 });
 
 ["dragenter", "dragover"].forEach((eventName) => {
@@ -57,6 +110,27 @@ elements.fileInput.addEventListener("change", (event) => {
 
 elements.dropZone.addEventListener("drop", (event) => {
   addFiles(event.dataTransfer.files);
+});
+
+["dragenter", "dragover"].forEach((eventName) => {
+  videoElements.dropZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    videoElements.dropZone.classList.add("drag-over");
+  });
+});
+
+["dragleave", "drop"].forEach((eventName) => {
+  videoElements.dropZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    videoElements.dropZone.classList.remove("drag-over");
+  });
+});
+
+videoElements.dropZone.addEventListener("drop", (event) => {
+  const [file] = event.dataTransfer.files;
+  if (file) {
+    loadVideoFile(file);
+  }
 });
 
 elements.widthInput.addEventListener("input", () => {
@@ -99,6 +173,23 @@ elements.presetButtons.forEach((button) => {
 elements.processButton.addEventListener("click", processBatch);
 elements.resetButton.addEventListener("click", resetApp);
 elements.downloadAllButton.addEventListener("click", downloadAllAsZip);
+
+videoElements.bitrateInput.addEventListener("input", () => {
+  videoElements.bitrateValue.value = `${Number(videoElements.bitrateInput.value).toFixed(2).replace(/\.00$/, "")} Mbps`;
+  clearVideoOutput();
+});
+
+[
+  videoElements.resolutionSelect,
+  videoElements.frameRateSelect,
+  videoElements.formatSelect,
+  videoElements.audioCheck,
+].forEach((control) => {
+  control.addEventListener("change", clearVideoOutput);
+});
+
+videoElements.processButton.addEventListener("click", optimizeVideo);
+videoElements.resetButton.addEventListener("click", resetVideo);
 
 async function addFiles(fileList) {
   const files = Array.from(fileList || []);
@@ -457,6 +548,286 @@ function resetApp() {
   setControlsEnabled(false);
   updateBatchSummary();
   renderQueue();
+}
+
+async function loadVideoFile(file) {
+  if (!file.type.startsWith("video/")) {
+    showVideoWarning("Please choose a video file.");
+    return;
+  }
+
+  resetVideo();
+  videoState.file = file;
+  videoState.originalUrl = URL.createObjectURL(file);
+
+  const metadataVideo = document.createElement("video");
+  metadataVideo.preload = "metadata";
+  metadataVideo.src = videoState.originalUrl;
+
+  try {
+    await loadVideoMetadata(metadataVideo);
+    videoState.width = metadataVideo.videoWidth;
+    videoState.height = metadataVideo.videoHeight;
+    videoState.duration = Number.isFinite(metadataVideo.duration) ? metadataVideo.duration : 0;
+
+    videoElements.originalPreview.src = videoState.originalUrl;
+    videoElements.originalMeta.textContent = `${videoState.width} x ${videoState.height}px`;
+    videoElements.originalSize.textContent = formatBytes(file.size);
+    videoElements.summary.className = "file-summary";
+    videoElements.summary.innerHTML = `
+      <span>${escapeHtml(file.name)}</span>
+      <strong>${formatBytes(file.size)}</strong>
+    `;
+
+    setVideoControlsEnabled(true);
+    setVideoStatus("Ready to optimize");
+  } catch (error) {
+    resetVideo();
+    showVideoWarning("This video could not be opened in the browser.");
+  }
+}
+
+async function optimizeVideo() {
+  if (!videoState.file || videoState.processing) {
+    return;
+  }
+
+  if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) {
+    showVideoWarning("This browser does not support in-browser video compression.");
+    return;
+  }
+
+  const mimeType = getSupportedVideoMimeType();
+  if (!mimeType) {
+    showVideoWarning("This browser cannot export WebM video.");
+    return;
+  }
+
+  clearVideoOutput();
+  videoState.processing = true;
+  setVideoControlsEnabled(false);
+  setVideoProgress(0);
+  videoElements.progressWrap.setAttribute("aria-hidden", "false");
+  setVideoStatus("Preparing video...");
+
+  let audioContext = null;
+  let sourceVideo = null;
+
+  try {
+    const { width, height } = getVideoOutputDimensions();
+    const frameRate = Number(videoElements.frameRateSelect.value);
+    const bitrate = Number(videoElements.bitrateInput.value) * 1000000;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext("2d");
+    context.fillStyle = "#000";
+    context.fillRect(0, 0, width, height);
+
+    sourceVideo = document.createElement("video");
+    sourceVideo.src = videoState.originalUrl;
+    sourceVideo.playsInline = true;
+    sourceVideo.preload = "auto";
+    sourceVideo.muted = !videoElements.audioCheck.checked;
+    sourceVideo.currentTime = 0;
+
+    await loadVideoMetadata(sourceVideo);
+
+    const outputStream = canvas.captureStream(frameRate);
+    if (videoElements.audioCheck.checked) {
+      try {
+        audioContext = new AudioContext();
+        await audioContext.resume();
+        const audioSource = audioContext.createMediaElementSource(sourceVideo);
+        const audioDestination = audioContext.createMediaStreamDestination();
+        audioSource.connect(audioDestination);
+        audioDestination.stream.getAudioTracks().forEach((track) => outputStream.addTrack(track));
+      } catch (error) {
+        sourceVideo.muted = true;
+      }
+    }
+
+    const chunks = [];
+    const recorder = new MediaRecorder(outputStream, {
+      mimeType,
+      videoBitsPerSecond: bitrate,
+    });
+
+    const recordingStopped = new Promise((resolve, reject) => {
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size) {
+          chunks.push(event.data);
+        }
+      };
+      recorder.onerror = () => reject(new Error("Video recording failed"));
+      recorder.onstop = () => resolve(new Blob(chunks, { type: "video/webm" }));
+    });
+
+    let drawing = true;
+    const drawFrame = () => {
+      if (!drawing) {
+        return;
+      }
+      context.drawImage(sourceVideo, 0, 0, width, height);
+      if (!sourceVideo.ended && !sourceVideo.paused) {
+        requestAnimationFrame(drawFrame);
+      }
+    };
+
+    sourceVideo.addEventListener("timeupdate", () => {
+      if (videoState.duration) {
+        const percent = Math.min(99, Math.round((sourceVideo.currentTime / videoState.duration) * 100));
+        setVideoProgress(percent);
+        setVideoStatus(`Optimizing ${percent}%`);
+      }
+    });
+
+    recorder.start(250);
+    await sourceVideo.play();
+    drawFrame();
+
+    await new Promise((resolve) => {
+      sourceVideo.onended = resolve;
+    });
+
+    drawing = false;
+    setVideoStatus("Finalizing video...");
+    recorder.stop();
+
+    const blob = await recordingStopped;
+    revokeUrl(videoState.outputUrl);
+    videoState.blob = blob;
+    videoState.outputUrl = URL.createObjectURL(blob);
+
+    videoElements.outputPreview.src = videoState.outputUrl;
+    videoElements.outputMeta.textContent = `${width} x ${height}px | WebM`;
+    videoElements.outputSize.textContent = formatBytes(blob.size);
+    videoElements.savingsValue.textContent = getSavingsText(videoState.file.size, blob.size);
+    videoElements.downloadLink.href = videoState.outputUrl;
+    videoElements.downloadLink.download = `${videoState.file.name.replace(/\.[^.]+$/, "")}-optimized.webm`;
+    videoElements.downloadLink.classList.remove("disabled");
+    setVideoProgress(100);
+    setVideoStatus("Video optimized");
+  } catch (error) {
+    showVideoWarning("Video optimization failed. Try a shorter clip, lower resolution, or another browser.");
+  } finally {
+    if (sourceVideo) {
+      sourceVideo.pause();
+      sourceVideo.removeAttribute("src");
+      sourceVideo.load();
+    }
+    if (audioContext) {
+      audioContext.close();
+    }
+    videoState.processing = false;
+    setVideoControlsEnabled(Boolean(videoState.file));
+  }
+}
+
+function clearVideoOutput() {
+  if (videoState.processing) {
+    return;
+  }
+
+  revokeUrl(videoState.outputUrl);
+  videoState.outputUrl = "";
+  videoState.blob = null;
+  videoElements.outputPreview.removeAttribute("src");
+  videoElements.outputMeta.textContent = "-";
+  videoElements.outputSize.textContent = "-";
+  videoElements.savingsValue.textContent = "-";
+  videoElements.downloadLink.removeAttribute("href");
+  videoElements.downloadLink.removeAttribute("download");
+  videoElements.downloadLink.classList.add("disabled");
+  videoElements.progressWrap.setAttribute("aria-hidden", "true");
+  setVideoProgress(0);
+  if (videoState.file) {
+    setVideoStatus("Ready to optimize");
+  }
+}
+
+function resetVideo() {
+  revokeUrl(videoState.originalUrl);
+  revokeUrl(videoState.outputUrl);
+
+  videoState.file = null;
+  videoState.originalUrl = "";
+  videoState.outputUrl = "";
+  videoState.blob = null;
+  videoState.width = 0;
+  videoState.height = 0;
+  videoState.duration = 0;
+  videoState.processing = false;
+
+  videoElements.input.value = "";
+  videoElements.originalPreview.removeAttribute("src");
+  videoElements.outputPreview.removeAttribute("src");
+  videoElements.originalMeta.textContent = "-";
+  videoElements.outputMeta.textContent = "-";
+  videoElements.originalSize.textContent = "-";
+  videoElements.outputSize.textContent = "-";
+  videoElements.savingsValue.textContent = "-";
+  videoElements.downloadLink.removeAttribute("href");
+  videoElements.downloadLink.removeAttribute("download");
+  videoElements.downloadLink.classList.add("disabled");
+  videoElements.summary.className = "file-summary empty";
+  videoElements.summary.innerHTML = "<span>No video loaded</span>";
+  videoElements.progressWrap.setAttribute("aria-hidden", "true");
+  setVideoProgress(0);
+  setVideoStatus("Waiting for video");
+  setVideoControlsEnabled(false);
+}
+
+function setVideoControlsEnabled(isEnabled) {
+  videoEnabledControls.forEach((control) => {
+    control.disabled = !isEnabled;
+  });
+}
+
+function getVideoOutputDimensions() {
+  if (videoElements.resolutionSelect.value === "original") {
+    return {
+      width: videoState.width,
+      height: videoState.height,
+    };
+  }
+
+  const maxSide = Number(videoElements.resolutionSelect.value);
+  const scale = Math.min(1, maxSide / Math.max(videoState.width, videoState.height));
+  return {
+    width: Math.max(2, Math.round((videoState.width * scale) / 2) * 2),
+    height: Math.max(2, Math.round((videoState.height * scale) / 2) * 2),
+  };
+}
+
+function getSupportedVideoMimeType() {
+  return [
+    "video/webm;codecs=vp9,opus",
+    "video/webm;codecs=vp8,opus",
+    "video/webm",
+  ].find((type) => MediaRecorder.isTypeSupported(type));
+}
+
+function loadVideoMetadata(video) {
+  return new Promise((resolve, reject) => {
+    video.onloadedmetadata = () => resolve(video);
+    video.onerror = reject;
+  });
+}
+
+function setVideoProgress(percent) {
+  videoElements.progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+}
+
+function setVideoStatus(message) {
+  videoElements.status.className = "file-summary empty video-status";
+  videoElements.status.innerHTML = `<span>${escapeHtml(message)}</span>`;
+}
+
+function showVideoWarning(message) {
+  videoElements.status.className = "file-summary empty video-status warning-text";
+  videoElements.status.innerHTML = `<span>${escapeHtml(message)}</span>`;
 }
 
 function setControlsEnabled(isEnabled) {

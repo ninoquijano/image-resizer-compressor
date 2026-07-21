@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Image Resizer and Compressor</title>
+    <title>Image and Video Compressor</title>
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
@@ -104,6 +104,120 @@
           </div>
           <div class="queue-list empty" id="queueList">
             <span class="placeholder">Selected images will appear here</span>
+          </div>
+        </section>
+
+        <section class="video-tool" aria-labelledby="video-title">
+          <header class="section-heading">
+            <div>
+              <p class="eyebrow">Browser Video Tool</p>
+              <h2 id="video-title">Video Optimizer and Compressor</h2>
+            </div>
+            <button class="ghost-button" id="videoResetButton" type="button" disabled>Reset Video</button>
+          </header>
+
+          <div class="tool-grid">
+            <section class="panel upload-panel" aria-label="Upload video">
+              <label class="drop-zone video-drop-zone" id="videoDropZone" for="videoInput">
+                <input id="videoInput" type="file" accept="video/*">
+                <span class="drop-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" role="img">
+                    <path d="M7 5a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h7a3 3 0 0 0 3-3v-.59l2.29 2.3A1 1 0 0 0 21 17V7a1 1 0 0 0-1.71-.71L17 8.59V8a3 3 0 0 0-3-3H7Zm10 6.41 2-2v5.18l-2-2v-1.18ZM6 8a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V8Z"></path>
+                  </svg>
+                </span>
+                <strong>Drop a video here</strong>
+                <span>or click to choose an MP4, MOV, WebM, AVI, or MKV file</span>
+              </label>
+
+              <div class="file-summary empty" id="videoSummary">
+                <span>No video loaded</span>
+              </div>
+            </section>
+
+            <section class="panel controls-panel" aria-label="Video compression controls">
+              <div class="control-row">
+                <label for="videoResolutionSelect">Max resolution</label>
+                <select id="videoResolutionSelect" disabled>
+                  <option value="original">Original</option>
+                  <option value="1080">1080p</option>
+                  <option value="720" selected>720p</option>
+                  <option value="480">480p</option>
+                  <option value="360">360p</option>
+                </select>
+              </div>
+
+              <div class="control-row slider-row">
+                <div class="label-line">
+                  <label for="videoBitrateInput">Video bitrate</label>
+                  <output id="videoBitrateValue" for="videoBitrateInput">2.5 Mbps</output>
+                </div>
+                <input id="videoBitrateInput" type="range" min="0.5" max="8" step="0.25" value="2.5" disabled>
+              </div>
+
+              <div class="dimensions-grid">
+                <div class="control-row">
+                  <label for="videoFrameRateSelect">Frame rate</label>
+                  <select id="videoFrameRateSelect" disabled>
+                    <option value="24">24 fps</option>
+                    <option value="30" selected>30 fps</option>
+                    <option value="60">60 fps</option>
+                  </select>
+                </div>
+                <div class="control-row">
+                  <label for="videoFormatSelect">Output format</label>
+                  <select id="videoFormatSelect" disabled>
+                    <option value="video/webm">WebM</option>
+                  </select>
+                </div>
+              </div>
+
+              <label class="check-row" for="videoAudioCheck">
+                <input id="videoAudioCheck" type="checkbox" checked disabled>
+                <span>Include audio when supported</span>
+              </label>
+
+              <button class="primary-button" id="videoProcessButton" type="button" disabled>Optimize Video</button>
+            </section>
+          </div>
+
+          <section class="video-preview-grid" aria-label="Video previews">
+            <div class="video-preview-panel">
+              <div class="preview-heading">
+                <h3>Original</h3>
+                <span id="videoOriginalMeta">-</span>
+              </div>
+              <video id="videoOriginalPreview" controls playsinline></video>
+            </div>
+            <div class="video-preview-panel">
+              <div class="preview-heading">
+                <h3>Optimized</h3>
+                <span id="videoOutputMeta">-</span>
+              </div>
+              <video id="videoOutputPreview" controls playsinline></video>
+            </div>
+          </section>
+
+          <section class="result-panel video-result-panel" aria-live="polite">
+            <div class="metric">
+              <span>Original size</span>
+              <strong id="videoOriginalSize">-</strong>
+            </div>
+            <div class="metric">
+              <span>New size</span>
+              <strong id="videoOutputSize">-</strong>
+            </div>
+            <div class="metric">
+              <span>Savings</span>
+              <strong id="videoSavingsValue">-</strong>
+            </div>
+            <a class="download-button disabled" id="videoDownloadLink" download>Download Video</a>
+          </section>
+
+          <div class="video-progress" id="videoProgressWrap" aria-hidden="true">
+            <div id="videoProgressBar"></div>
+          </div>
+          <div class="file-summary empty video-status" id="videoStatus">
+            <span>Waiting for video</span>
           </div>
         </section>
       </section>
