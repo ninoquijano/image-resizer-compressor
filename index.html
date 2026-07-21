@@ -330,6 +330,86 @@
           <div class="video-progress" id="pdfProgressWrap" aria-hidden="true">
             <div id="pdfProgressBar"></div>
           </div>
+
+          <section class="pdf-combine-panel" aria-label="Combine multiple PDFs">
+            <header class="section-heading compact-heading">
+              <div>
+                <p class="eyebrow">PDF Merge Tool</p>
+                <h2>Combine PDFs</h2>
+              </div>
+              <button class="ghost-button" id="pdfCombineResetButton" type="button" disabled>Reset Merge</button>
+            </header>
+
+            <div class="tool-grid">
+              <section class="panel upload-panel" aria-label="Upload PDFs to combine">
+                <label class="drop-zone pdf-drop-zone" id="pdfCombineDropZone" for="pdfCombineInput">
+                  <input id="pdfCombineInput" type="file" accept="application/pdf,.pdf" multiple>
+                  <span class="drop-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" role="img">
+                      <path d="M7 2a3 3 0 0 0-3 3v14a3 3 0 0 0 3 3h6a1 1 0 1 0 0-2H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h6v4a1 1 0 0 0 1 1h4v3a1 1 0 1 0 2 0V8.83a3 3 0 0 0-.88-2.12l-3.83-3.83A3 3 0 0 0 13.17 2H7Zm8 3.41L16.59 7H15V5.41Z"></path>
+                      <path d="M18 14a1 1 0 0 1 1 1v2h2a1 1 0 1 1 0 2h-2v2a1 1 0 1 1-2 0v-2h-2a1 1 0 1 1 0-2h2v-2a1 1 0 0 1 1-1Z"></path>
+                    </svg>
+                  </span>
+                  <strong>Drop PDFs here</strong>
+                  <span>or click to choose multiple PDFs and merge them in order</span>
+                </label>
+
+                <div class="file-summary empty" id="pdfCombineSummary">
+                  <span>No PDFs loaded</span>
+                </div>
+              </section>
+
+              <section class="panel controls-panel" aria-label="Combined PDF controls">
+                <div class="dimensions-grid">
+                  <div class="control-row">
+                    <label for="pdfCombineScaleSelect">Render size</label>
+                    <select id="pdfCombineScaleSelect" disabled>
+                      <option value="1.5">High</option>
+                      <option value="1" selected>Balanced</option>
+                      <option value="0.75">Small</option>
+                      <option value="0.5">Tiny</option>
+                    </select>
+                  </div>
+                  <div class="control-row">
+                    <label for="pdfCombineQualityInput">Image quality</label>
+                    <input id="pdfCombineQualityInput" type="number" min="35" max="95" value="72" disabled>
+                  </div>
+                </div>
+
+                <button class="primary-button" id="pdfCombineButton" type="button" disabled>Combine PDFs</button>
+              </section>
+            </div>
+
+            <section class="queue-panel" aria-label="PDF merge queue">
+              <div class="queue-heading">
+                <h2>Merge Queue</h2>
+                <span id="pdfCombineStatus">Waiting for PDFs</span>
+              </div>
+              <div class="queue-list empty" id="pdfCombineList">
+                <span class="placeholder">PDFs will appear here in merge order</span>
+              </div>
+            </section>
+
+            <section class="result-panel pdf-result-panel" aria-live="polite">
+              <div class="metric">
+                <span>PDFs</span>
+                <strong id="pdfCombineCount">-</strong>
+              </div>
+              <div class="metric">
+                <span>Total pages</span>
+                <strong id="pdfCombinePages">-</strong>
+              </div>
+              <div class="metric">
+                <span>Output size</span>
+                <strong id="pdfCombineOutputSize">-</strong>
+              </div>
+              <a class="download-button disabled" id="pdfCombineDownloadLink" download>Download Combined PDF</a>
+            </section>
+
+            <div class="video-progress" id="pdfCombineProgressWrap" aria-hidden="true">
+              <div id="pdfCombineProgressBar"></div>
+            </div>
+          </section>
         </section>
       </section>
     </main>

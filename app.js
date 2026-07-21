@@ -27,6 +27,14 @@ const pdfState = {
   pdfjsLib: null,
 };
 
+const pdfCombineState = {
+  items: [],
+  nextId: 1,
+  outputBlob: null,
+  outputUrl: "",
+  processing: false,
+};
+
 const PDFJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
 const PDFJS_WORKER_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
 
@@ -101,6 +109,24 @@ const pdfElements = {
   progressBar: document.getElementById("pdfProgressBar"),
 };
 
+const pdfCombineElements = {
+  input: document.getElementById("pdfCombineInput"),
+  dropZone: document.getElementById("pdfCombineDropZone"),
+  summary: document.getElementById("pdfCombineSummary"),
+  scaleSelect: document.getElementById("pdfCombineScaleSelect"),
+  qualityInput: document.getElementById("pdfCombineQualityInput"),
+  combineButton: document.getElementById("pdfCombineButton"),
+  resetButton: document.getElementById("pdfCombineResetButton"),
+  list: document.getElementById("pdfCombineList"),
+  status: document.getElementById("pdfCombineStatus"),
+  count: document.getElementById("pdfCombineCount"),
+  pages: document.getElementById("pdfCombinePages"),
+  outputSize: document.getElementById("pdfCombineOutputSize"),
+  downloadLink: document.getElementById("pdfCombineDownloadLink"),
+  progressWrap: document.getElementById("pdfCombineProgressWrap"),
+  progressBar: document.getElementById("pdfCombineProgressBar"),
+};
+
 const enabledControls = [
   elements.formatSelect,
   elements.widthInput,
@@ -131,6 +157,13 @@ const pdfEnabledControls = [
   pdfElements.resetButton,
 ];
 
+const pdfCombineEnabledControls = [
+  pdfCombineElements.scaleSelect,
+  pdfCombineElements.qualityInput,
+  pdfCombineElements.combineButton,
+  pdfCombineElements.resetButton,
+];
+
 elements.fileInput.addEventListener("change", (event) => {
   addFiles(event.target.files);
 });
@@ -147,6 +180,10 @@ pdfElements.input.addEventListener("change", (event) => {
   if (file) {
     loadPdfFile(file);
   }
+});
+
+pdfCombineElements.input.addEventListener("change", (event) => {
+  addPdfCombineFiles(event.target.files);
 });
 
 ["dragenter", "dragover"].forEach((eventName) => {
@@ -209,6 +246,24 @@ pdfElements.dropZone.addEventListener("drop", (event) => {
   }
 });
 
+["dragenter", "dragover"].forEach((eventName) => {
+  pdfCombineElements.dropZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    pdfCombineElements.dropZone.classList.add("drag-over");
+  });
+});
+
+["dragleave", "drop"].forEach((eventName) => {
+  pdfCombineElements.dropZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    pdfCombineElements.dropZone.classList.remove("drag-over");
+  });
+});
+
+pdfCombineElements.dropZone.addEventListener("drop", (event) => {
+  addPdfCombineFiles(event.dataTransfer.files);
+});
+
 elements.widthInput.addEventListener("input", () => {
   if (elements.lockAspect.checked && state.firstAspectRatio) {
     elements.heightInput.value = Math.max(1, Math.round(Number(elements.widthInput.value) / state.firstAspectRatio));
@@ -264,6 +319,10 @@ pdfElements.qualityInput.addEventListener("input", () => {
   control.addEventListener("change", clearPdfOutputs);
 });
 
+[pdfCombineElements.scaleSelect, pdfCombineElements.qualityInput].forEach((control) => {
+  control.addEventListener("change", clearPdfCombineOutput);
+});
+
 [
   videoElements.resolutionSelect,
   videoElements.frameRateSelect,
@@ -280,6 +339,8 @@ pdfElements.compressButton.addEventListener("click", compressPdf);
 pdfElements.exportImagesButton.addEventListener("click", exportPdfImages);
 pdfElements.resetButton.addEventListener("click", resetPdf);
 pdfElements.imagesDownloadButton.addEventListener("click", downloadPdfImagesZip);
+pdfCombineElements.combineButton.addEventListener("click", combinePdfs);
+pdfCombineElements.resetButton.addEventListener("click", resetPdfCombine);
 
 async function addFiles(fileList) {
   const files = Array.from(fileList || []);
@@ -1294,6 +1355,268 @@ async function downloadPdfImagesZip() {
     pdfElements.imagesDownloadButton.disabled = false;
     pdfElements.imagesDownloadButton.textContent = "Download Images ZIP";
   }
+}
+
+async function addPdfCombineFiles(fileList) {
+  const files = Array.from(fileList || []).filter((file) => {
+    return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  });
+
+  if (files.length === 0) {
+    showPdfCombineWarning("Please choose one or more PDF files.");
+    return;
+  }
+
+  clearPdfCombineOutput();
+  setPdfCombineStatus("Loading PDFs...");
+
+  try {
+    const pdfjsLib = await ensurePdfJs();
+    for (const file of files) {
+      const data = await file.arrayBuffer();
+      const document = await pdfjsLib.getDocument({ data }).promise;
+      pdfCombineState.items.push({
+        id: pdfCombineState.nextId,
+        file,
+        document,
+        pages: document.numPages,
+      });
+      pdfCombineState.nextId += 1;
+    }
+
+    pdfCombineElements.input.value = "";
+    setPdfCombineControlsEnabled(true);
+    updatePdfCombineSummary();
+    renderPdfCombineList();
+  } catch (error) {
+    showPdfCombineWarning("One of these PDFs could not be opened in the browser.");
+    updatePdfCombineSummary();
+    renderPdfCombineList();
+  }
+}
+
+async function combinePdfs() {
+  if (pdfCombineState.items.length === 0 || pdfCombineState.processing) {
+    return;
+  }
+
+  clearPdfCombineOutput();
+  pdfCombineState.processing = true;
+  setPdfCombineControlsEnabled(false);
+  setPdfCombineProgress(0);
+  pdfCombineElements.progressWrap.setAttribute("aria-hidden", "false");
+
+  try {
+    const scale = Number(pdfCombineElements.scaleSelect.value);
+    const quality = clampQuality(pdfCombineElements.qualityInput.value) / 100;
+    const pages = [];
+    const totalPages = pdfCombineState.items.reduce((sum, item) => sum + item.pages, 0);
+    let renderedPages = 0;
+
+    for (const item of pdfCombineState.items) {
+      for (let pageNumber = 1; pageNumber <= item.pages; pageNumber += 1) {
+        setPdfCombineStatus(`Rendering ${renderedPages + 1} of ${totalPages}`);
+        const page = await item.document.getPage(pageNumber);
+        const baseViewport = page.getViewport({ scale: 1 });
+        const viewport = page.getViewport({ scale });
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(viewport.width));
+        canvas.height = Math.max(1, Math.round(viewport.height));
+        const context = canvas.getContext("2d");
+        context.fillStyle = "#fff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvasContext: context, viewport }).promise;
+
+        const blob = await canvasToBlob(canvas, "image/jpeg", quality);
+        pages.push({
+          number: pages.length + 1,
+          blob,
+          width: canvas.width,
+          height: canvas.height,
+          pageWidth: baseViewport.width,
+          pageHeight: baseViewport.height,
+          format: "image/jpeg",
+        });
+        renderedPages += 1;
+        setPdfCombineProgress(Math.round((renderedPages / totalPages) * 100));
+      }
+    }
+
+    const outputBlob = await buildImagePdf(pages);
+    revokeUrl(pdfCombineState.outputUrl);
+    pdfCombineState.outputBlob = outputBlob;
+    pdfCombineState.outputUrl = URL.createObjectURL(outputBlob);
+    pdfCombineElements.downloadLink.href = pdfCombineState.outputUrl;
+    pdfCombineElements.downloadLink.download = "combined.pdf";
+    pdfCombineElements.downloadLink.classList.remove("disabled");
+    pdfCombineElements.outputSize.textContent = formatBytes(outputBlob.size);
+    setPdfCombineProgress(100);
+    setPdfCombineStatus("Combined PDF ready");
+  } catch (error) {
+    showPdfCombineWarning("PDF combine failed. Try fewer files or a lower render size.");
+  } finally {
+    pdfCombineState.processing = false;
+    setPdfCombineControlsEnabled(pdfCombineState.items.length > 0);
+  }
+}
+
+function renderPdfCombineList() {
+  if (pdfCombineState.items.length === 0) {
+    pdfCombineElements.list.className = "queue-list empty";
+    pdfCombineElements.list.innerHTML = '<span class="placeholder">PDFs will appear here in merge order</span>';
+    return;
+  }
+
+  pdfCombineElements.list.className = "queue-list";
+  pdfCombineElements.list.innerHTML = pdfCombineState.items.map((item, index) => `
+    <article class="queue-item pdf-combine-item" data-combine-id="${item.id}">
+      <div class="queue-order">${index + 1}</div>
+      <div class="queue-details">
+        <div class="queue-title">
+          <strong>${escapeHtml(item.file.name)}</strong>
+          <span class="status-pill done">${item.pages} page${item.pages === 1 ? "" : "s"}</span>
+        </div>
+        <div class="queue-meta">
+          <span>${formatBytes(item.file.size)}</span>
+          <span>PDF</span>
+          <span>${index === 0 ? "First" : `After ${index}`}</span>
+          <span>Ready</span>
+        </div>
+      </div>
+      <div class="queue-actions">
+        <button type="button" class="icon-button" data-combine-up="${item.id}" ${index === 0 ? "disabled" : ""} aria-label="Move ${escapeHtml(item.file.name)} up">^</button>
+        <button type="button" class="icon-button" data-combine-down="${item.id}" ${index === pdfCombineState.items.length - 1 ? "disabled" : ""} aria-label="Move ${escapeHtml(item.file.name)} down">v</button>
+        <button type="button" class="icon-button" data-combine-remove="${item.id}" aria-label="Remove ${escapeHtml(item.file.name)}">x</button>
+      </div>
+    </article>
+  `).join("");
+
+  pdfCombineElements.list.querySelectorAll("[data-combine-up]").forEach((button) => {
+    button.addEventListener("click", () => movePdfCombineItem(Number(button.dataset.combineUp), -1));
+  });
+  pdfCombineElements.list.querySelectorAll("[data-combine-down]").forEach((button) => {
+    button.addEventListener("click", () => movePdfCombineItem(Number(button.dataset.combineDown), 1));
+  });
+  pdfCombineElements.list.querySelectorAll("[data-combine-remove]").forEach((button) => {
+    button.addEventListener("click", () => removePdfCombineItem(Number(button.dataset.combineRemove)));
+  });
+}
+
+function movePdfCombineItem(id, direction) {
+  const index = pdfCombineState.items.findIndex((item) => item.id === id);
+  const targetIndex = index + direction;
+  if (index === -1 || targetIndex < 0 || targetIndex >= pdfCombineState.items.length) {
+    return;
+  }
+  const [item] = pdfCombineState.items.splice(index, 1);
+  pdfCombineState.items.splice(targetIndex, 0, item);
+  clearPdfCombineOutput();
+  updatePdfCombineSummary();
+  renderPdfCombineList();
+}
+
+function removePdfCombineItem(id) {
+  const index = pdfCombineState.items.findIndex((item) => item.id === id);
+  if (index === -1) {
+    return;
+  }
+  pdfCombineState.items.splice(index, 1);
+  clearPdfCombineOutput();
+  updatePdfCombineSummary();
+  renderPdfCombineList();
+  setPdfCombineControlsEnabled(pdfCombineState.items.length > 0);
+}
+
+function clearPdfCombineOutput() {
+  if (pdfCombineState.processing) {
+    return;
+  }
+  revokeUrl(pdfCombineState.outputUrl);
+  pdfCombineState.outputBlob = null;
+  pdfCombineState.outputUrl = "";
+  pdfCombineElements.downloadLink.removeAttribute("href");
+  pdfCombineElements.downloadLink.removeAttribute("download");
+  pdfCombineElements.downloadLink.classList.add("disabled");
+  pdfCombineElements.outputSize.textContent = "-";
+  pdfCombineElements.progressWrap.setAttribute("aria-hidden", "true");
+  setPdfCombineProgress(0);
+  if (pdfCombineState.items.length > 0) {
+    setPdfCombineStatus(`${pdfCombineState.items.length} PDF${pdfCombineState.items.length === 1 ? "" : "s"} ready`);
+  }
+}
+
+function resetPdfCombine() {
+  revokeUrl(pdfCombineState.outputUrl);
+  pdfCombineState.items = [];
+  pdfCombineState.nextId = 1;
+  pdfCombineState.outputBlob = null;
+  pdfCombineState.outputUrl = "";
+  pdfCombineState.processing = false;
+
+  pdfCombineElements.input.value = "";
+  pdfCombineElements.summary.className = "file-summary empty";
+  pdfCombineElements.summary.innerHTML = "<span>No PDFs loaded</span>";
+  pdfCombineElements.count.textContent = "-";
+  pdfCombineElements.pages.textContent = "-";
+  pdfCombineElements.outputSize.textContent = "-";
+  pdfCombineElements.downloadLink.removeAttribute("href");
+  pdfCombineElements.downloadLink.removeAttribute("download");
+  pdfCombineElements.downloadLink.classList.add("disabled");
+  pdfCombineElements.progressWrap.setAttribute("aria-hidden", "true");
+  setPdfCombineProgress(0);
+  setPdfCombineStatus("Waiting for PDFs");
+  renderPdfCombineList();
+  setPdfCombineControlsEnabled(false);
+}
+
+function updatePdfCombineSummary() {
+  const totalPages = pdfCombineState.items.reduce((sum, item) => sum + item.pages, 0);
+  const totalSize = pdfCombineState.items.reduce((sum, item) => sum + item.file.size, 0);
+  const count = pdfCombineState.items.length;
+
+  pdfCombineElements.count.textContent = count ? String(count) : "-";
+  pdfCombineElements.pages.textContent = count ? String(totalPages) : "-";
+
+  if (count === 0) {
+    pdfCombineElements.summary.className = "file-summary empty";
+    pdfCombineElements.summary.innerHTML = "<span>No PDFs loaded</span>";
+    setPdfCombineStatus("Waiting for PDFs");
+  } else {
+    pdfCombineElements.summary.className = "file-summary";
+    pdfCombineElements.summary.innerHTML = `
+      <span>${count} PDF${count === 1 ? "" : "s"} selected</span>
+      <strong>${formatBytes(totalSize)}</strong>
+    `;
+    setPdfCombineStatus(`${count} PDF${count === 1 ? "" : "s"} ready`);
+  }
+}
+
+function setPdfCombineControlsEnabled(isEnabled) {
+  pdfCombineEnabledControls.forEach((control) => {
+    control.disabled = !isEnabled;
+  });
+}
+
+function setPdfCombineProgress(percent) {
+  pdfCombineElements.progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+}
+
+function setPdfCombineStatus(message) {
+  pdfCombineElements.status.textContent = message;
+  pdfCombineElements.status.classList.remove("warning-text");
+}
+
+function showPdfCombineWarning(message) {
+  pdfCombineElements.status.textContent = message;
+  pdfCombineElements.status.classList.add("warning-text");
+}
+
+function clampQuality(value) {
+  const parsed = Math.round(Number(value));
+  if (!Number.isFinite(parsed)) {
+    return 72;
+  }
+  return Math.max(35, Math.min(95, parsed));
 }
 
 async function ensurePdfJs() {

@@ -473,6 +473,21 @@ button,
   gap: 8px;
 }
 
+.queue-order {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-weight: 900;
+}
+
+.pdf-combine-item {
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+}
+
 .small-button,
 .icon-button {
   background: #edf3f1;
@@ -660,6 +675,10 @@ button,
 
   .queue-item {
     grid-template-columns: 68px minmax(0, 1fr);
+  }
+
+  .pdf-combine-item {
+    grid-template-columns: 46px minmax(0, 1fr);
   }
 
   .queue-thumb {
