@@ -551,6 +551,10 @@ button,
   margin-top: 18px;
 }
 
+.pdf-combine-result-panel {
+  grid-template-columns: repeat(4, 1fr) minmax(190px, 0.8fr);
+}
+
 .pdf-actions-row {
   grid-template-columns: 1fr 1fr;
 }

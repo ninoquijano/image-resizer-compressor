@@ -121,6 +121,7 @@ const pdfCombineElements = {
   status: document.getElementById("pdfCombineStatus"),
   count: document.getElementById("pdfCombineCount"),
   pages: document.getElementById("pdfCombinePages"),
+  originalSize: document.getElementById("pdfCombineOriginalSize"),
   outputSize: document.getElementById("pdfCombineOutputSize"),
   downloadLink: document.getElementById("pdfCombineDownloadLink"),
   progressWrap: document.getElementById("pdfCombineProgressWrap"),
@@ -1558,6 +1559,7 @@ function resetPdfCombine() {
   pdfCombineElements.summary.innerHTML = "<span>No PDFs loaded</span>";
   pdfCombineElements.count.textContent = "-";
   pdfCombineElements.pages.textContent = "-";
+  pdfCombineElements.originalSize.textContent = "-";
   pdfCombineElements.outputSize.textContent = "-";
   pdfCombineElements.downloadLink.removeAttribute("href");
   pdfCombineElements.downloadLink.removeAttribute("download");
@@ -1576,6 +1578,7 @@ function updatePdfCombineSummary() {
 
   pdfCombineElements.count.textContent = count ? String(count) : "-";
   pdfCombineElements.pages.textContent = count ? String(totalPages) : "-";
+  pdfCombineElements.originalSize.textContent = count ? formatBytes(totalSize) : "-";
 
   if (count === 0) {
     pdfCombineElements.summary.className = "file-summary empty";
