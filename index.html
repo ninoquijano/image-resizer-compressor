@@ -7,9 +7,21 @@
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
+    <header class="site-header" aria-label="Tool navigation">
+      <nav class="site-nav">
+        <a class="brand-link" href="#image-tool">File Tools</a>
+        <div class="nav-links">
+          <a href="#image-tool">Images</a>
+          <a href="#video-tool">Video</a>
+          <a href="#pdf-tool">PDF</a>
+          <a href="#combine-pdfs">Combine PDFs</a>
+        </div>
+      </nav>
+    </header>
+
     <main class="app-shell">
       <section class="workspace" aria-labelledby="app-title">
-        <header class="topbar">
+        <header class="topbar" id="image-tool">
           <div>
             <p class="eyebrow">Browser Image Tool</p>
             <h1 id="app-title">Image Resizer and Compressor</h1>
@@ -113,7 +125,7 @@
         </section>
 
         <section class="video-tool" aria-labelledby="video-title">
-          <header class="section-heading">
+          <header class="section-heading" id="video-tool">
             <div>
               <p class="eyebrow">Browser Video Tool</p>
               <h2 id="video-title">Video Optimizer and Compressor</h2>
@@ -228,7 +240,7 @@
         </section>
 
         <section class="pdf-tool" aria-labelledby="pdf-title">
-          <header class="section-heading">
+          <header class="section-heading" id="pdf-tool">
             <div>
               <p class="eyebrow">Browser PDF Tool</p>
               <h2 id="pdf-title">PDF Compressor and Image Exporter</h2>
@@ -342,7 +354,7 @@
           </div>
 
           <section class="pdf-combine-panel" aria-label="Combine multiple PDFs">
-            <header class="section-heading compact-heading">
+            <header class="section-heading compact-heading" id="combine-pdfs">
               <div>
                 <p class="eyebrow">PDF Merge Tool</p>
                 <h2>Combine PDFs</h2>
