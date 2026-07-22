@@ -62,6 +62,11 @@
               <span>Keep aspect ratio</span>
             </label>
 
+            <label class="check-row" for="appendCompressedCheck">
+              <input id="appendCompressedCheck" type="checkbox" disabled>
+              <span>Add -compressed to filenames</span>
+            </label>
+
             <div class="control-row slider-row">
               <div class="label-line">
                 <label for="qualityInput">Compression quality</label>
@@ -277,6 +282,11 @@
                 </div>
                 <input id="pdfQualityInput" type="range" min="35" max="95" value="72" disabled>
               </div>
+
+              <label class="check-row" for="pdfAppendCompressedCheck">
+                <input id="pdfAppendCompressedCheck" type="checkbox" disabled>
+                <span>Add -compressed to filename</span>
+              </label>
 
               <div class="preset-row pdf-actions-row">
                 <button class="primary-button" id="pdfCompressButton" type="button" disabled>Compress PDF</button>

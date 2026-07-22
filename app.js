@@ -46,6 +46,7 @@ const elements = {
   widthInput: document.getElementById("widthInput"),
   heightInput: document.getElementById("heightInput"),
   lockAspect: document.getElementById("lockAspect"),
+  appendCompressedCheck: document.getElementById("appendCompressedCheck"),
   qualityInput: document.getElementById("qualityInput"),
   qualityValue: document.getElementById("qualityValue"),
   processButton: document.getElementById("processButton"),
@@ -92,6 +93,7 @@ const pdfElements = {
   imageFormatSelect: document.getElementById("pdfImageFormatSelect"),
   qualityInput: document.getElementById("pdfQualityInput"),
   qualityValue: document.getElementById("pdfQualityValue"),
+  appendCompressedCheck: document.getElementById("pdfAppendCompressedCheck"),
   compressButton: document.getElementById("pdfCompressButton"),
   exportImagesButton: document.getElementById("pdfExportImagesButton"),
   resetButton: document.getElementById("pdfResetButton"),
@@ -133,6 +135,7 @@ const enabledControls = [
   elements.widthInput,
   elements.heightInput,
   elements.lockAspect,
+  elements.appendCompressedCheck,
   elements.qualityInput,
   elements.processButton,
   elements.resetButton,
@@ -153,6 +156,7 @@ const pdfEnabledControls = [
   pdfElements.scaleSelect,
   pdfElements.imageFormatSelect,
   pdfElements.qualityInput,
+  pdfElements.appendCompressedCheck,
   pdfElements.compressButton,
   pdfElements.exportImagesButton,
   pdfElements.resetButton,
@@ -289,6 +293,8 @@ elements.formatSelect.addEventListener("change", () => {
   clearBatchResults();
 });
 
+elements.appendCompressedCheck.addEventListener("change", clearBatchResults);
+
 elements.presetButtons.forEach((button) => {
   button.addEventListener("click", () => {
     const firstItem = state.items[0];
@@ -316,7 +322,7 @@ pdfElements.qualityInput.addEventListener("input", () => {
   clearPdfOutputs();
 });
 
-[pdfElements.scaleSelect, pdfElements.imageFormatSelect].forEach((control) => {
+[pdfElements.scaleSelect, pdfElements.imageFormatSelect, pdfElements.appendCompressedCheck].forEach((control) => {
   control.addEventListener("change", clearPdfOutputs);
 });
 
@@ -693,6 +699,7 @@ function resetApp() {
   elements.fileInput.value = "";
   elements.widthInput.value = "";
   elements.heightInput.value = "";
+  elements.appendCompressedCheck.checked = false;
   elements.qualityInput.value = 82;
   elements.qualityValue.value = "82%";
   elements.downloadAllButton.disabled = true;
@@ -1087,7 +1094,7 @@ async function compressPdf() {
 
     const baseName = pdfState.file.name.replace(/\.[^.]+$/, "");
     pdfElements.downloadLink.href = pdfState.pdfUrl;
-    pdfElements.downloadLink.download = `${baseName}.pdf`;
+    pdfElements.downloadLink.download = `${baseName}${pdfElements.appendCompressedCheck.checked ? "-compressed" : ""}.pdf`;
     pdfElements.downloadLink.classList.remove("disabled");
     pdfElements.savingsValue.textContent = getSavingsText(pdfState.file.size, pdfBlob.size);
     renderPdfPagesList(pages);
@@ -1309,6 +1316,7 @@ function resetPdf() {
   pdfState.processing = false;
 
   pdfElements.input.value = "";
+  pdfElements.appendCompressedCheck.checked = false;
   pdfElements.summary.className = "file-summary empty";
   pdfElements.summary.innerHTML = "<span>No PDF loaded</span>";
   pdfElements.pageCount.textContent = "-";
@@ -1740,7 +1748,8 @@ function getSavingsText(originalBytes, compressedBytes) {
 
 function getOutputFileName(item) {
   const baseName = item.file.name.replace(/\.[^.]+$/, "");
-  return `${baseName}.${getExtension(elements.formatSelect.value)}`;
+  const suffix = elements.appendCompressedCheck.checked ? "-compressed" : "";
+  return `${baseName}${suffix}.${getExtension(elements.formatSelect.value)}`;
 }
 
 async function createZipBlob(items) {
