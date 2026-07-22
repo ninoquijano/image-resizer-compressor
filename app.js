@@ -1087,7 +1087,7 @@ async function compressPdf() {
 
     const baseName = pdfState.file.name.replace(/\.[^.]+$/, "");
     pdfElements.downloadLink.href = pdfState.pdfUrl;
-    pdfElements.downloadLink.download = `${baseName}-compressed.pdf`;
+    pdfElements.downloadLink.download = `${baseName}.pdf`;
     pdfElements.downloadLink.classList.remove("disabled");
     pdfElements.savingsValue.textContent = getSavingsText(pdfState.file.size, pdfBlob.size);
     renderPdfPagesList(pages);
@@ -1740,7 +1740,7 @@ function getSavingsText(originalBytes, compressedBytes) {
 
 function getOutputFileName(item) {
   const baseName = item.file.name.replace(/\.[^.]+$/, "");
-  return `${baseName}-compressed.${getExtension(elements.formatSelect.value)}`;
+  return `${baseName}.${getExtension(elements.formatSelect.value)}`;
 }
 
 async function createZipBlob(items) {
